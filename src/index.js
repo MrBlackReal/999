@@ -17,7 +17,7 @@ const api_voices = api_endpoint + "/voices"
 if (!fs.existsSync(path.join(__dirname, "bin")))
     fs.mkdir(path.join(__dirname, "bin"), () => { });
 
-addSpeechEvent(client, { lang: "de-DE" })
+addSpeechEvent(client, { lang: "de-DE", ignoreBots: true })
 
 client.on("error", err => console.error(err));
 
@@ -29,9 +29,11 @@ client.on(SpeechEvents.speech, async (msg) => {
     if (!msg.content)
         return;
 
+    msg.content = msg.content.trim().toLowerCase()
+
     console.log(`${msg.author.globalName}:`, msg.content);
 
-    if (msg.content.toLowerCase().includes("hallo wie geht's") || true) {
+    if (msg.content.toLowerCase().includes("hallo wie geht's")) {
         const conn = msg.connection;
 
         if (!conn) {
@@ -40,15 +42,19 @@ client.on(SpeechEvents.speech, async (msg) => {
         }
 
         const request = {
-            text: msg.content, //"Mir geht es gut. Wie geht es dir?",
+            text: "Mir geht es gut. Wie geht es dir?",
             voice: "de",
         };
 
         let response = null;
-        await axios.post(api_synthesize, request, {responseType: "arraybuffer"}).then(res => response = res.data).catch(err => console.error(err));
+        await axios.post(api_synthesize, request, { responseType: "arraybuffer" }).then(res => response = res.data).catch(err => console.error(err));
 
-        if (!response) {
-            console.log("resp is null");
+        if (!response || response.error) {
+            console.log("There was an error generating the response.");
+
+            if (response.error)
+                console.error("Error:", response.error);
+
             return;
         }
 

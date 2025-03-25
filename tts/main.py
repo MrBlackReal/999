@@ -2,14 +2,15 @@ import os
 import time
 import espeakng
 
+from os import path
 from flask import Flask, request, jsonify
 
 server = Flask(__name__)
 tts = espeakng.Speaker(voice="en-us")
 
-bin_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "bin")
+bin_path = path.join(path.dirname(path.realpath(__file__)), "bin")
 
-if not os.path.exists(bin_path):
+if not path.exists(bin_path):
     os.mkdir(bin_path)
 
 @server.route("/synthesize", methods=["POST"])
@@ -26,11 +27,11 @@ def synthesize():
     tts.pitch = int(data.get("pitch", 50))
     tts.wpm = int(data.get("speed", 175))
 
-    output_path = os.path.join(bin_path, f"{int(time.time())}.wav")
+    output_path = path.join(bin_path, f"{int(time.time())}.wav")
 
     tts.say(text, export_path=output_path)
 
-    while not os.path.exists(output_path):
+    while not path.exists(output_path):
         time.sleep(0.1)
 
     with open(output_path, "rb") as audio:
