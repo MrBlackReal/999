@@ -1,39 +1,42 @@
-const { Client, Intents, IntentsBitField, GatewayIntentBits } = require('discord.js');
-const { joinVoiceChannel, VoiceConnectionStatus, getVoiceConnection, createAudioPlayer, createAudioResource, AudioPlayerStatus } = require('@discordjs/voice');
+const { Client, Intents, GatewayIntentBits } = require('discord.js');
+const { joinVoiceChannel, getVoiceConnection, createAudioPlayer, createAudioResource, AudioPlayerStatus } = require('@discordjs/voice');
 const { addSpeechEvent, SpeechEvents } = require('discord-speech-recognition');
-const { TextToSpeechClient } = require('@google-cloud/text-to-speech');
+const { textToSpeech } = require("./util")
+const { findCommand } = require("./command/command_handler")
 const fs = require("fs");
 const path = require('path');
-const axios = require("axios")
 
 require("dotenv").config()
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates] });
+const bin_path = path.join(__dirname, "bin");
 
-const api_endpoint = "http://192.168.10.124:5000"
-const api_synthesize = api_endpoint + "/synthesize"
-const api_voices = api_endpoint + "/voices"
-
-if (!fs.existsSync(path.join(__dirname, "bin")))
-    fs.mkdir(path.join(__dirname, "bin"), () => { });
+if (!fs.existsSync(bin_path))
+    fs.mkdir(bin_path, () => { });
 
 addSpeechEvent(client, { lang: "de-DE", ignoreBots: true })
 
 client.on("error", err => console.error(err));
-
-client.once('ready', () => {
-    console.log(`Logged in as ${client.user.tag}!`);
-});
+client.once('ready', () => console.log(`Logged in as ${client.user.tag}!`));
 
 client.on(SpeechEvents.speech, async (msg) => {
     if (!msg.content)
         return;
 
-    msg.content = msg.content.trim().toLowerCase()
+    const content = msg.content.trim().toLowerCase()
 
     console.log(`${msg.author.globalName}:`, msg.content);
 
-    if (msg.content.toLowerCase().includes("hallo wie geht's")) {
+    const command = findCommand(content)
+
+    if (!command) {
+        console.error("No command found for: " + content);
+        return;        
+    }
+
+    await command.execute(msg);
+
+    if (content.includes("hallo wie geht's")) {
         const conn = msg.connection;
 
         if (!conn) {
@@ -46,14 +49,13 @@ client.on(SpeechEvents.speech, async (msg) => {
             voice: "de",
         };
 
-        let response = null;
-        await axios.post(api_synthesize, request, { responseType: "arraybuffer" }).then(res => response = res.data).catch(err => console.error(err));
+        const voice_data = await textToSpeech(request)
 
-        if (!response || response.error) {
+        if (!voice_data || voice_data.error) {
             console.log("There was an error generating the response.");
 
-            if (response.error)
-                console.error("Error:", response.error);
+            if (voice_data.error != undefined)
+                console.error("Error:", voice_data.error);
 
             return;
         }
@@ -61,13 +63,17 @@ client.on(SpeechEvents.speech, async (msg) => {
         const fileName = Date.now().toString() + ".wav";
         const loc = path.join(__dirname, "bin", fileName);
 
-        fs.writeFile(loc, Buffer.from(response), 'binary', err => err ?? console.error(err));
+        fs.writeFile(loc, Buffer.from(voice_data), 'binary', err => {
+            if (err)
+                console.error(err);
+        });
+
         console.log('Audio content written to file: ' + loc);
 
         const player = createAudioPlayer();
 
         player.on("error", err => err ?? console.error("Error while playing audio:\n", err));
-        player.once(AudioPlayerStatus.Idle, () => fs.rm(loc, () => { }));
+        player.once(AudioPlayerStatus.Idle, () => setTimeout(() => fs.rm(loc, () => { }), 2500));
 
         conn.subscribe(player);
 
@@ -77,25 +83,26 @@ client.on(SpeechEvents.speech, async (msg) => {
 });
 
 client.on('voiceStateUpdate', (oldState, newState) => {
-    if (newState.member.id == "377862824564621312") {
-        const channel = newState.channel;
+    if (newState.member.id != "377862824564621312")
+        return;
 
-        if (!channel) {
-            const conn = getVoiceConnection(oldState.guild.id)
+    const channel = newState.channel;
 
-            if (conn)
-                conn.destroy();
+    if (!channel) {
+        const conn = getVoiceConnection(oldState.guild.id)
 
-            return
-        }
+        if (conn)
+            conn.destroy();
 
-        const conn = joinVoiceChannel({
-            channelId: channel.id,
-            guildId: channel.guildId,
-            adapterCreator: channel.guild.voiceAdapterCreator,
-            selfDeaf: false
-        });
+        return
     }
+
+    joinVoiceChannel({
+        channelId: channel.id,
+        guildId: channel.guildId,
+        adapterCreator: channel.guild.voiceAdapterCreator,
+        selfDeaf: false
+    });
 });
 
 client.login(process.env.BOT_TOKEN);
