@@ -13,7 +13,7 @@ A Discord bot that **recognizes speech**, **responds with text-to-speech**, and 
 ### 1️⃣ Clone the Repository  
 ```bash
 git clone https://github.com/MrBlackReal/999.git
-cd 999/src```
+cd 999```
 
 2️⃣ Install Dependencies
 
