@@ -2,11 +2,11 @@
 
 A Discord bot that **recognizes speech**, **responds with text-to-speech**, and **automatically joins voice channels**.
 
-## ðŸš€ Features
-âœ… Speech recognition (German: `de-DE`)
-âœ… Text-to-speech responses
-âœ… Command execution from voice input
-âœ… Auto-join/leave for a specific user
+## Features
+- Speech recognition (German: `de-DE`)
+- Text-to-speech responses
+- Command execution from voice input
+- Auto-join/leave for a specific user
 
 ## Installation
 
