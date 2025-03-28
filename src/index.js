@@ -2,9 +2,11 @@ const { Client, Intents, GatewayIntentBits } = require('discord.js');
 const { joinVoiceChannel, getVoiceConnection, createAudioPlayer, createAudioResource, AudioPlayerStatus } = require('@discordjs/voice');
 const { addSpeechEvent, SpeechEvents } = require('discord-speech-recognition');
 const { textToSpeech } = require("./util")
-const { findCommand } = require("./command/command_handler")
+const { getCommand } = require("./command/command_handler")
 const fs = require("fs");
 const path = require('path');
+const userIds = String(process.env.USER_IDS).split(",")
+const botName = "james"
 
 require("dotenv").config()
 
@@ -23,67 +25,66 @@ client.on(SpeechEvents.speech, async (msg) => {
     if (!msg.content)
         return;
 
-    const content = msg.content.trim().toLowerCase()
+    const content = msg.content.trim().toLowerCase();
 
-    console.log(`${msg.author.globalName}:`, msg.content);
+    console.log(`${msg.author.globalName}:`, content, content.includes(botName), botName);
 
-    const command = findCommand(content)
+    if (!content.includes(botName))
+        return;
+
+    let split = content.split(botName + " ")
+
+    const command = getCommand(split[1])
 
     if (!command) {
         console.error("No command found for: " + content);
-        return;        
+        return;
     }
 
-    await command.execute(msg);
+    console.log("Running command: " + command.keywords);
 
-    if (content.includes("hallo wie geht's")) {
-        const conn = msg.connection;
+    const conn = msg.connection;
 
-        if (!conn) {
-            console.log("invalid connection");
-            return;
-        }
-
-        const request = {
-            text: "Mir geht es gut. Wie geht es dir?",
-            voice: "de",
-        };
-
-        const voice_data = await textToSpeech(request)
-
-        if (!voice_data || voice_data.error) {
-            console.log("There was an error generating the response.");
-
-            if (voice_data.error != undefined)
-                console.error("Error:", voice_data.error);
-
-            return;
-        }
-
-        const fileName = Date.now().toString() + ".wav";
-        const loc = path.join(__dirname, "bin", fileName);
-
-        fs.writeFile(loc, Buffer.from(voice_data), 'binary', err => {
-            if (err)
-                console.error(err);
-        });
-
-        console.log('Audio content written to file: ' + loc);
-
-        const player = createAudioPlayer();
-
-        player.on("error", err => err ?? console.error("Error while playing audio:\n", err));
-        player.once(AudioPlayerStatus.Idle, () => setTimeout(() => fs.rm(loc, () => { }), 2500));
-
-        conn.subscribe(player);
-
-        const resource = createAudioResource(loc)
-        player.play(resource);
+    if (!conn) {
+        console.log("invalid connection");
+        return;
     }
+
+    const request = await command.execute(client, msg);
+
+    const voice_data = await textToSpeech(request)
+
+    if (!voice_data || voice_data.error) {
+        console.log("There was an error generating the response.");
+
+        if (voice_data.error != undefined)
+            console.error("Error:", voice_data.error);
+
+        return;
+    }
+
+    const fileName = Date.now().toString() + ".wav";
+    const loc = path.join(__dirname, "bin", fileName);
+
+    fs.writeFile(loc, Buffer.from(voice_data), 'binary', err => {
+        if (err)
+            console.error(err);
+        else
+            console.log('Audio content written to file: ' + loc);
+    });
+
+    const player = createAudioPlayer();
+
+    player.once(AudioPlayerStatus.Idle, () => setTimeout(() => fs.rm(loc, () => { }), 2500));
+
+    conn.subscribe(player);
+
+    const resource = createAudioResource(loc)
+    player.play(resource);
 });
 
 client.on('voiceStateUpdate', (oldState, newState) => {
-    if (newState.member.id != "377862824564621312")
+    if (userIds.some(v => v == newState.member.id))
         return;
 
     const channel = newState.channel;
@@ -101,7 +102,8 @@ client.on('voiceStateUpdate', (oldState, newState) => {
         channelId: channel.id,
         guildId: channel.guildId,
         adapterCreator: channel.guild.voiceAdapterCreator,
-        selfDeaf: false
+        selfDeaf: false,
+        selfMute: false
     });
 });
 
